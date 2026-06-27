@@ -1,5 +1,11 @@
 # Agentic development scaffold
 
+> **Rewrite in progress.** This harness is being re-implemented as a deterministic
+> **LangGraph** FSM orchestrator over pluggable role backends (`stub` / `claude_sdk` /
+> `own`), with single observability via self-hosted **Langfuse**. The spec lives in
+> `tz.md`; new code lands in `harness/`. The `orchestrator/` package below is the
+> original implementation, kept as reference until the rewrite lands.
+
 A reusable structure for building features with a loop of specialized agents,
 driven by a **deterministic Python orchestrator** that runs each role as its own
 Claude Agent SDK `query()`. One feature = one git branch.

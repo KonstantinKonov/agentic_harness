@@ -1,1 +1,14 @@
 tz.md
+__pycache__/
+__pytest__/
+*.pyc
+*.egg-info/
+build/
+.venv/
+
+# harness rewrite (feature_scaffold)
+.env
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+pgdata/

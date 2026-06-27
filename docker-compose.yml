@@ -1,0 +1,45 @@
+# Local observability + state infra for the harness (tz.md: feature_scaffold).
+#
+#   docker compose up -d
+#   -> Langfuse UI at http://localhost:3000  (create a project, copy keys into .env)
+#   -> Postgres at localhost:5432 with TWO databases:
+#        * langfuse          (Langfuse's own store)
+#        * app_checkpointer  (LangGraph Postgres checkpointer; created by docker/postgres-init.sql)
+#
+# NOTE: pinned to Langfuse v2, which needs only Postgres. Langfuse v3 additionally
+# requires ClickHouse/Redis/MinIO — out of scope for the PoC.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-harness}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-harness}
+      POSTGRES_DB: ${POSTGRES_DB:-langfuse}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-harness}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  langfuse:
+    image: langfuse/langfuse:2
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-harness}:${POSTGRES_PASSWORD:-harness}@postgres:5432/${POSTGRES_DB:-langfuse}
+      NEXTAUTH_URL: ${LANGFUSE_HOST:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:-changeme-nextauth-secret}
+      SALT: ${LANGFUSE_SALT:-changeme-salt}
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      TELEMETRY_ENABLED: "false"
+
+volumes:
+  pgdata:
