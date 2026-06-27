@@ -100,6 +100,7 @@ def render_metadata(st: BranchState) -> str:
             "last_reviewer_verdict": st.last_reviewer_verdict,
             "last_tester_verdict": st.last_tester_verdict,
             "escalation_reason": st.escalation_reason,
+            "transitions": len(st.history),  # non-empty transition history
         },
         sort_keys=False,
         allow_unicode=True,
