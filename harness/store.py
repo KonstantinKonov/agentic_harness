@@ -144,3 +144,9 @@ def write_main(root: Path, states: Iterable[BranchState]) -> None:
     gcc = root / ".GCC"
     gcc.mkdir(parents=True, exist_ok=True)
     (gcc / "main.md").write_text(render_main(states), encoding="utf-8")
+
+
+def append_devlog(root: Path, entry: str) -> None:
+    """Append one distilled entry to DEVLOG.md (the only append-mode file; written at DONE)."""
+    with (root / "DEVLOG.md").open("a", encoding="utf-8") as f:
+        f.write("\n" + entry.strip() + "\n")
