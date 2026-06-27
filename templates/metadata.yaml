@@ -1,0 +1,10 @@
+# TEMPLATE — copied to .GCC/branches/<branch>/metadata.yaml at bootstrap, then maintained
+# by the orchestrator. The orchestrator's cross-branch view reads only this + commit.md.
+git_branch: feature_<name>
+stage: DEV                        # DEV | REVIEW | TEST | FINAL_REVIEW | DONE | ESCALATED
+loop_a_rounds: 0                  # developer <-> reviewer iterations
+loop_b_rounds: 0                  # developer <-> tester iterations
+open_issues: 0
+last_reviewer_verdict: null       # PASS | CHANGES_REQUESTED | null
+last_tester_verdict: null         # PASS | FAILED | null
+escalation_reason: null           # cap_exceeded | reviewer_tester_conflict | null

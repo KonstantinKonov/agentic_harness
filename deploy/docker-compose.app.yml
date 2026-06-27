@@ -1,0 +1,15 @@
+# Приложение, собранное агентами. Портов наружу НЕ публикует — до него ходит только Caddy
+# по сети demonet под именем сервиса `app`. Пересборка = новый деплой.
+services:
+  app:
+    build: ./app
+    restart: unless-stopped
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+    networks:
+      - demonet
+
+networks:
+  demonet:
+    external: true
+    name: demonet

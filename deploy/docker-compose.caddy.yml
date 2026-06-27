@@ -1,0 +1,25 @@
+# Постоянный edge. Поднимается ОДИН раз при пред-запекании, дальше живёт сам.
+# Создаёт сеть demonet, к которой app-контейнер подключается при деплое.
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DEMO_DOMAIN: ${DEMO_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data      # сюда Caddy кладёт cert — переживает рестарты
+      - caddy_config:/config
+    networks:
+      - demonet
+
+networks:
+  demonet:
+    name: demonet
+
+volumes:
+  caddy_data:
+  caddy_config:

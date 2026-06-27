@@ -1,0 +1,5 @@
+# Edge reverse-proxy. Auto-TLS через Let's Encrypt для поддомена.
+# DEMO_DOMAIN берётся из окружения (см. .env). Caddy сам выпускает и продлевает cert.
+{$DEMO_DOMAIN} {
+	reverse_proxy app:8000
+}

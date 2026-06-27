@@ -1,0 +1,16 @@
+# CONTRACT — enforced at runtime as JSON Schema via output_format (see orchestrator/schemas.py:TesterVerdict).
+# The SDK validates the tester's final answer against this shape and re-prompts on mismatch.
+# The tester is adversarial: it tries to break the system and find security issues. It does NOT
+# supply ids — the orchestrator assigns T-<n>.
+verdict: FAILED                   # PASS | FAILED
+attack_surface_covered:           # what was actually attacked — guards against hollow green
+  - "expired / forged / tampered tokens"
+  - "SQL injection in /login"
+  - "race on concurrent refresh"
+failures:
+  - severity: blocker             # blocker | major | minor
+    what: "CSRF on cookie-based refresh"
+    repro: "tests/security/test_csrf.py::test_refresh_no_samesite"
+    recommendation: "SameSite=Strict + CSRF token"   # optional; remediation hint only
+tests_added:                      # persisted into the suite and committed
+  - tests/security/test_csrf.py

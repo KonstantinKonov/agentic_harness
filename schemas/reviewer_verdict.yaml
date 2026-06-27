@@ -1,0 +1,12 @@
+# CONTRACT — enforced at runtime as JSON Schema via output_format (see orchestrator/schemas.py:ReviewerVerdict).
+# The SDK validates the reviewer's final answer against this shape and re-prompts on mismatch.
+# The reviewer judges SPEC CONFORMANCE only and does NOT propose fixes. It does NOT supply ids —
+# the orchestrator assigns R-<n> and tracks repeats itself.
+verdict: CHANGES_REQUESTED        # PASS | CHANGES_REQUESTED
+spec_conformance: partial         # full | partial | off_track
+issues:
+  - severity: blocker             # blocker | major | minor
+    what: "/login leaks stack trace on 500"
+    where: "auth/views.py:login"
+rejects:                          # approaches the developer must not retry (-> commit.md "Rejected")
+  - "per-field defensive wrapping — out of scope for this spec"
