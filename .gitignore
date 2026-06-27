@@ -1,14 +1,1 @@
-# Working memory of the dev<->reviewer<->tester loop. Latest-state, not versioned.
-.GCC/
-
-# Local working docs. Only the distilled DEVLOG.md and README.md are committed.
-plan.md
-CLAUDE.md
-
-# Python orchestrator artifacts
-__pycache__/
-__pytest__/
-*.pyc
-*.egg-info/
-build/
-.venv/
+tz.md

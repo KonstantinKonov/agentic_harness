@@ -1,0 +1,9 @@
+# Cross-branch view
+git_branch: feature_auth
+stage: TEST                       # DEV | REVIEW | TEST | FINAL_REVIEW | DONE | ESCALATED
+loop_a_rounds: 2                  # developer <-> reviewer iterations
+loop_b_rounds: 1                  # developer <-> tester iterations
+open_issues: 2
+last_reviewer_verdict: PASS       # PASS | CHANGES_REQUESTED | null
+last_tester_verdict: FAILED       # PASS | FAILED | null
+escalation_reason: null           # oscillaiton | cap_exceeded | developer_blocked | no_verdict | max_transitions
