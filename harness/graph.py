@@ -14,14 +14,15 @@ budget. git goes through ``VcsPort``; the rendered files are written by the stor
 """
 from __future__ import annotations
 
-from collections.abc import Hashable
+from collections.abc import Awaitable, Callable, Hashable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
-from harness.backends import RoleBackend, RoleContext
+from harness.backends import RoleBackend, RoleContext, RoleResult
 from harness.config import CAP, MAX_TRANSITIONS
 from harness.curation import apply_reviewer, apply_tester
+from harness.observability import get_tracer
 from harness.schemas import DevStatus, ReviewerVerdict, TesterVerdict
 from harness.state import BranchState, HistoryEntry
 from harness.store import (
@@ -63,6 +64,14 @@ def route(state: GraphState) -> str:
     return _STAGE_TO_NODE[st.stage]
 
 
+def _verdict_of(res: RoleResult) -> str | None:
+    """The role's raw verdict for a span attribute (PASS / CHANGES_REQUESTED / green / ...)."""
+    if res.structured is None:
+        return None
+    v = res.structured.get("verdict") or res.structured.get("dev_status")
+    return str(v) if v is not None else None
+
+
 def _apply_cap(st: BranchState) -> None:
     """Port of the run-loop cap check: a finished loop at CAP rounds escalates."""
     if (
@@ -101,6 +110,20 @@ class Nodes:
     def _ctx(self, st: BranchState) -> RoleContext:
         return RoleContext(root=self.deps.root, branch=st.branch)
 
+    async def _call(self, role: str, task: str, st: BranchState) -> RoleResult:
+        """Run one role through the backend inside a role span (role/backend/cost/verdict)."""
+        with get_tracer().start_as_current_span(f"role.{role}") as span:
+            res = await self.deps.backend.run(role, task, context=self._ctx(st))
+            span.set_attribute("harness.role", role)
+            span.set_attribute("harness.backend", type(self.deps.backend).__name__)
+            span.set_attribute("harness.cost_usd", res.cost_usd)
+            verdict = _verdict_of(res)
+            if verdict is not None:
+                span.set_attribute("harness.verdict", verdict)
+            if res.subtype:
+                span.set_attribute("harness.subtype", res.subtype)
+        return res
+
     def _render(self, st: BranchState) -> None:
         write_branch_files(self.deps.root, st)
         write_main(self.deps.root, [st])
@@ -110,8 +133,7 @@ class Nodes:
 
     async def plan(self, state: GraphState) -> GraphState:
         st = state["branch_state"].model_copy(deep=True)
-        res = await self.deps.backend.run("planner", plan_task(st, self.deps.base),
-                                          context=self._ctx(st))
+        res = await self._call("planner", plan_task(st, self.deps.base), st)
         st.cost_usd += res.cost_usd
         if res.text.strip():
             write_plan(self.deps.root, res.text)  # PLAN pre-step produces the spec
@@ -122,8 +144,7 @@ class Nodes:
 
     async def dev(self, state: GraphState) -> GraphState:
         st = state["branch_state"].model_copy(deep=True)
-        res = await self.deps.backend.run("developer", dev_task(st, self.deps.base),
-                                          context=self._ctx(st))
+        res = await self._call("developer", dev_task(st, self.deps.base), st)
         st.cost_usd += res.cost_usd
         committed = False
         if res.structured is None:
@@ -150,8 +171,7 @@ class Nodes:
 
     async def review(self, state: GraphState) -> GraphState:
         st = state["branch_state"].model_copy(deep=True)
-        res = await self.deps.backend.run("reviewer", review_task(st, self.deps.base, final=False),
-                                          context=self._ctx(st))
+        res = await self._call("reviewer", review_task(st, self.deps.base, final=False), st)
         st.cost_usd += res.cost_usd
         st.last_review_commit = self.deps.vcs.head()  # the HEAD this review saw
         if res.structured is None:
@@ -169,8 +189,7 @@ class Nodes:
 
     async def test(self, state: GraphState) -> GraphState:
         st = state["branch_state"].model_copy(deep=True)
-        res = await self.deps.backend.run("tester", test_task(st, self.deps.base),
-                                          context=self._ctx(st))
+        res = await self._call("tester", test_task(st, self.deps.base), st)
         st.cost_usd += res.cost_usd
         if res.structured is None:
             st.escalation_reason = "no_verdict"
@@ -195,8 +214,7 @@ class Nodes:
             st.stage = "DONE"
             self._render(st)
             return self._step(state, st)
-        res = await self.deps.backend.run("reviewer", review_task(st, self.deps.base, final=True),
-                                          context=self._ctx(st))
+        res = await self._call("reviewer", review_task(st, self.deps.base, final=True), st)
         st.cost_usd += res.cost_usd
         st.last_review_commit = self.deps.vcs.head()
         if res.structured is None:
@@ -214,8 +232,7 @@ class Nodes:
 
     async def summary(self, state: GraphState) -> GraphState:
         st = state["branch_state"].model_copy(deep=True)
-        res = await self.deps.backend.run("summarizer", summary_task(st, self.deps.base),
-                                          context=self._ctx(st))  # free text, no schema
+        res = await self._call("summarizer", summary_task(st, self.deps.base), st)  # free text
         st.cost_usd += res.cost_usd
         if res.text.strip():
             append_devlog(self.deps.root, res.text)
@@ -231,18 +248,42 @@ class Nodes:
         return {"branch_state": st, "transitions": state["transitions"]}  # terminal
 
 
+_Node = Callable[[GraphState], Awaitable[GraphState]]
+
+
+def _traced(name: str, fn: _Node) -> _Node:
+    """Wrap a node in a stage span (node name, transition counter, resulting stage)."""
+    async def wrapper(state: GraphState) -> GraphState:
+        with get_tracer().start_as_current_span(f"stage.{name}") as span:
+            span.set_attribute("harness.node", name)
+            span.set_attribute("harness.transitions_in", state["transitions"])
+            out = await fn(state)
+            bs = out["branch_state"]
+            span.set_attribute("harness.stage_out", bs.stage)
+            if bs.escalation_reason:
+                span.set_attribute("harness.escalation_reason", bs.escalation_reason)
+            return out
+
+    return wrapper
+
+
 def build_graph(deps: GraphDeps, *, checkpointer: BaseCheckpointSaver | None = None):  # type: ignore[no-untyped-def]
     from langgraph.graph import END, START, StateGraph
 
     nodes = Nodes(deps)
     builder: StateGraph = StateGraph(GraphState)
-    builder.add_node("plan", nodes.plan)
-    builder.add_node("dev", nodes.dev)
-    builder.add_node("review", nodes.review)
-    builder.add_node("test", nodes.test)
-    builder.add_node("final_review", nodes.final_review)
-    builder.add_node("summary", nodes.summary)
-    builder.add_node("escalated", nodes.escalated)
+    node_fns: dict[str, _Node] = {
+        "plan": nodes.plan,
+        "dev": nodes.dev,
+        "review": nodes.review,
+        "test": nodes.test,
+        "final_review": nodes.final_review,
+        "summary": nodes.summary,
+        "escalated": nodes.escalated,
+    }
+    for name, fn in node_fns.items():
+        # cast: langgraph's add_node overloads don't accept a wrapped Callable cleanly.
+        builder.add_node(name, cast(Any, _traced(name, fn)))
 
     route_map: dict[Hashable, str] = {
         n: n for n in ("dev", "review", "test", "final_review", "summary", "escalated")
@@ -269,5 +310,13 @@ async def run_branch(
     config: RunnableConfig = {"recursion_limit": MAX_TRANSITIONS * 2 + 5}
     if checkpointer is not None and thread_id:
         config["configurable"] = {"thread_id": thread_id}
-    final = await graph.ainvoke(init, config=config)
+    with get_tracer().start_as_current_span(f"branch.{branch}") as root:
+        root.set_attribute("harness.branch", branch)
+        root.set_attribute("harness.base", deps.base)
+        final = await graph.ainvoke(init, config=config)
+        bs = final["branch_state"]
+        root.set_attribute("harness.stage", bs.stage)
+        root.set_attribute("harness.cost_usd", bs.cost_usd)
+        if bs.escalation_reason:
+            root.set_attribute("harness.escalation_reason", bs.escalation_reason)
     return final["branch_state"]
