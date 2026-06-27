@@ -24,7 +24,13 @@ from harness.config import CAP, MAX_TRANSITIONS
 from harness.curation import apply_reviewer, apply_tester
 from harness.schemas import DevStatus, ReviewerVerdict, TesterVerdict
 from harness.state import BranchState, HistoryEntry
-from harness.store import BranchPaths, append_devlog, write_branch_files, write_main
+from harness.store import (
+    BranchPaths,
+    append_devlog,
+    write_branch_files,
+    write_main,
+    write_plan,
+)
 from harness.tasks import dev_task, plan_task, review_task, summary_task, test_task
 from harness.vcs import VcsPort
 
@@ -107,6 +113,8 @@ class Nodes:
         res = await self.deps.backend.run("planner", plan_task(st, self.deps.base),
                                           context=self._ctx(st))
         st.cost_usd += res.cost_usd
+        if res.text.strip():
+            write_plan(self.deps.root, res.text)  # PLAN pre-step produces the spec
         st.history.append(HistoryEntry(role="planner", stage="PLAN", cost_usd=res.cost_usd))
         st.stage = "DEV"
         self._render(st)
@@ -223,7 +231,7 @@ class Nodes:
         return {"branch_state": st, "transitions": state["transitions"]}  # terminal
 
 
-def build_graph(deps: GraphDeps, *, checkpointer: "BaseCheckpointSaver | None" = None):  # type: ignore[no-untyped-def]
+def build_graph(deps: GraphDeps, *, checkpointer: BaseCheckpointSaver | None = None):  # type: ignore[no-untyped-def]
     from langgraph.graph import END, START, StateGraph
 
     nodes = Nodes(deps)
@@ -251,7 +259,7 @@ async def run_branch(
     deps: GraphDeps,
     branch: str,
     *,
-    checkpointer: "BaseCheckpointSaver | None" = None,
+    checkpointer: BaseCheckpointSaver | None = None,
     thread_id: str | None = None,
 ) -> BranchState:
     """Drive one branch to DONE or ESCALATED and return the final state."""

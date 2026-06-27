@@ -150,3 +150,8 @@ def append_devlog(root: Path, entry: str) -> None:
     """Append one distilled entry to DEVLOG.md (the only append-mode file; written at DONE)."""
     with (root / "DEVLOG.md").open("a", encoding="utf-8") as f:
         f.write("\n" + entry.strip() + "\n")
+
+
+def write_plan(root: Path, text: str) -> None:
+    """Overwrite plan.md with the planner's spec (the PLAN pre-step output)."""
+    (root / "plan.md").write_text(text.strip() + "\n", encoding="utf-8")

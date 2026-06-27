@@ -5,6 +5,7 @@ from pathlib import Path
 
 from harness.backends import RoleContext, RoleResult, StubBackend
 from harness.config import CAP, MAX_TRANSITIONS
+from harness.fixtures import happy_path_scripts
 from harness.graph import (
     GraphDeps,
     GraphState,
@@ -14,7 +15,7 @@ from harness.graph import (
     route,
     run_branch,
 )
-from harness.schemas import DevStatus, ReviewerVerdict, TesterVerdict
+from harness.schemas import DevStatus, ReviewerVerdict
 from harness.state import BranchState
 from harness.vcs import FakeVcs
 
@@ -106,19 +107,10 @@ async def test_escalated_node_stamps_max_transitions(tmp_path: Path) -> None:
 
 # --- full runs ---------------------------------------------------------------
 
-def _happy_backend() -> StubBackend:
-    return StubBackend({
-        "planner": ["plan for the feature"],
-        "developer": [DevStatus(dev_status="green")],
-        "reviewer": [ReviewerVerdict(verdict="PASS", spec_conformance="full")],
-        "tester": [TesterVerdict(verdict="PASS")],
-        "summarizer": ["## feature_auth — done"],
-    })
-
-
 async def test_happy_path_reaches_done(tmp_path: Path) -> None:
     vcs = FakeVcs()
-    deps = GraphDeps(backend=_happy_backend(), vcs=vcs, root=tmp_path, base="main")
+    deps = GraphDeps(backend=StubBackend(happy_path_scripts()), vcs=vcs,
+                     root=tmp_path, base="main")
     final = await run_branch(deps, "feature_auth")
 
     assert final.stage == "DONE"

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-CAP = 3                        # max rounds per loop (A: dev<->reviewer, B: dev<->tester) -> else ESCALATED
+CAP = 3                        # rounds per loop cap (A: dev/reviewer, B: dev/tester)
 MAX_TRANSITIONS = 4 * CAP + 4  # hard safety stop against a runaway graph
 MAX_TURNS_PER_ROLE = 40        # tool-use round trips inside a single role invocation
 
