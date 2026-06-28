@@ -70,14 +70,15 @@ def _imports_subprocess(path: Path) -> bool:
     return False
 
 
-def test_no_direct_git_subprocess_outside_gitvcs() -> None:
-    """The graph must touch git only through VcsPort: no module imports subprocess except
-    the (future) GitVcs at harness/vcs/git.py. (AST-based, so prose mentions don't count.)"""
+def test_subprocess_only_in_sanctioned_execution_points() -> None:
+    """Shell/git execution is allowed in exactly two sanctioned places: the (future) GitVcs
+    (harness/vcs/git.py) and the bash tool (harness/own/tools.py). No other module may import
+    subprocess. (AST-based, so prose mentions don't count.)"""
+    sanctioned = {("vcs", "git.py"), ("own", "tools.py")}
     pkg_root = Path(harness.__file__).parent
     offenders = [
         py.relative_to(pkg_root).as_posix()
         for py in pkg_root.rglob("*.py")
-        if not (py.name == "git.py" and py.parent.name == "vcs")
-        and _imports_subprocess(py)
+        if (py.parent.name, py.name) not in sanctioned and _imports_subprocess(py)
     ]
-    assert not offenders, f"git/subprocess must go through GitVcs only, found in: {offenders}"
+    assert not offenders, f"subprocess must stay in GitVcs / bash tool, found in: {offenders}"
