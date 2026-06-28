@@ -1,7 +1,7 @@
 """CLI: drive one feature branch to DONE or ESCALATED.
 
     python -m harness <branch> [--base main] [--root .]
-                               [--backend stub|claude_sdk] [--checkpointer memory|postgres]
+                               [--backend stub|claude_sdk|own] [--checkpointer memory|postgres]
 
 Thin wrapper: argparse + asyncio.run around graph.run_branch. No business logic here.
 The default backend is ``stub`` (deterministic, no network) so a bare run is a safe demo;
@@ -30,6 +30,9 @@ def make_backend(name: str) -> RoleBackend:
     if name == "claude_sdk":
         from harness.backends.claude_sdk import ClaudeSdkBackend  # lazy: don't pull the SDK
         return ClaudeSdkBackend()
+    if name == "own":
+        from harness.backends.own import OwnBackend  # lazy: don't pull the aggregator client
+        return OwnBackend()
     raise SystemExit(f"unknown backend: {name!r}")
 
 
@@ -65,7 +68,7 @@ def main() -> None:
     ap.add_argument("branch", help="feature branch, e.g. feature_auth")
     ap.add_argument("--base", default="main", help="diff/branch base (default: main)")
     ap.add_argument("--root", default=".", help="repo root (default: .)")
-    ap.add_argument("--backend", choices=["stub", "claude_sdk"], default="stub")
+    ap.add_argument("--backend", choices=["stub", "claude_sdk", "own"], default="stub")
     ap.add_argument("--checkpointer", choices=["memory", "postgres"], default="memory")
     raise SystemExit(asyncio.run(_run(ap.parse_args())))
 
