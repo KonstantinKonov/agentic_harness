@@ -38,10 +38,17 @@ def dev_task(st: BranchState, base: str) -> str:
 
 
 def review_task(st: BranchState, base: str, *, final: bool) -> str:
-    scope = "the WHOLE feature" if final else "this round's change"
+    # Variant B: FINAL_REVIEW reads the whole feature; a per-round REVIEW reads only what
+    # changed since the previous review (falls back to the whole feature on the first one).
+    if final:
+        scope, rng = "the WHOLE feature", f"{base}...{st.branch}"
+    elif st.last_review_commit:
+        scope, rng = "the change since your last review", f"{st.last_review_commit}...HEAD"
+    else:
+        scope, rng = "this round's change", f"{base}...{st.branch}"
     return (
         f"Stage {'FINAL_REVIEW' if final else 'REVIEW'} on branch `{st.branch}`.\n"
-        f"Read `plan.md` and run `git diff {base}...{st.branch}` to review {scope}.\n"
+        f"Read `plan.md` and run `git diff {rng}` to review {scope}.\n"
         f"Judge spec conformance only — report each problem as severity / what / where. "
         f"Do NOT propose fixes and do NOT invent issue ids; the orchestrator assigns them."
     )

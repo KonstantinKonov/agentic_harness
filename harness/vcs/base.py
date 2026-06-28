@@ -24,7 +24,9 @@ class VcsPort(Protocol):
         """Current HEAD revision."""
 
     def commit(self, paths: Sequence[Path], message: str) -> None:
-        """Stage ``paths`` and commit them with ``message`` (no-op if nothing changed)."""
+        """Stage all new/changed files and commit with ``message`` (no-op if nothing changed).
+        ``paths`` is advisory: GitVcs stages everything (``git add -A``) so the agent's code
+        lands in history; FakeVcs records ``paths`` for assertions."""
 
     def diff(self, *args: str) -> str:
         """Pass-through to ``git diff <args>``; e.g. ``diff("a...HEAD", "--name-only")``."""

@@ -1,6 +1,6 @@
 """CLI: drive one feature branch to DONE or ESCALATED.
 
-    python -m harness <branch> [--base main] [--root .]
+    python -m harness <branch> [--base main] [--root .] [--vcs fake|git]
                                [--backend stub|claude_sdk|own] [--checkpointer memory|postgres]
 
 Thin wrapper: argparse + asyncio.run around graph.run_branch. No business logic here.
@@ -21,7 +21,15 @@ from harness.graph import GraphDeps, run_branch
 from harness.observability import configure_tracing
 from harness.state import BranchState
 from harness.store import append_devlog
-from harness.vcs import FakeVcs
+from harness.vcs import FakeVcs, GitVcs, VcsPort
+
+
+def make_vcs(name: str, root: Path) -> VcsPort:
+    if name == "fake":
+        return FakeVcs()
+    if name == "git":
+        return GitVcs(root)
+    raise SystemExit(f"unknown vcs: {name!r}")
 
 
 def make_backend(name: str) -> RoleBackend:
@@ -45,7 +53,7 @@ def write_run_record(root: Path, branch: str, final: BranchState, *, traced: boo
 
 async def _run(args: argparse.Namespace) -> int:
     root = Path(args.root).resolve()
-    deps = GraphDeps(backend=make_backend(args.backend), vcs=FakeVcs(),
+    deps = GraphDeps(backend=make_backend(args.backend), vcs=make_vcs(args.vcs, root),
                      root=root, base=args.base)
     traced = configure_tracing()
 
@@ -69,6 +77,7 @@ def main() -> None:
     ap.add_argument("--base", default="main", help="diff/branch base (default: main)")
     ap.add_argument("--root", default=".", help="repo root (default: .)")
     ap.add_argument("--backend", choices=["stub", "claude_sdk", "own"], default="stub")
+    ap.add_argument("--vcs", choices=["fake", "git"], default="fake")
     ap.add_argument("--checkpointer", choices=["memory", "postgres"], default="memory")
     raise SystemExit(asyncio.run(_run(ap.parse_args())))
 
