@@ -6,6 +6,7 @@ langgraph, no network.
 """
 from __future__ import annotations
 
+from harness.own.loop import LoopConfig, run_agent_loop
 from harness.own.model_client import (
     ModelClient,
     ModelClientError,
@@ -26,6 +27,8 @@ from harness.own.tools import (
 )
 
 __all__ = [
+    "LoopConfig",
+    "run_agent_loop",
     "ModelClient",
     "ModelClientError",
     "ModelConfig",
